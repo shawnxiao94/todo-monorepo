@@ -430,3 +430,160 @@ jobs:
 ```
 
 本文先试介绍了 monorepo 方案要解决的问题并分别介绍了 pnpm 和 changesets 工具是怎么解决的。然后基于 pnpm 和 changesets 两个工具搭建 monorepo 项目，并结合 GitHub Actions 实现自动化版本修改和发布。
+
+#### 修改验证
+
+修改 pkg-a 和 pkg-b package.json 中的 main 属性
+main 属性为该工程的入口文件，默认为 "main": "index.js"， 修改为 "main": "src/index.ts"，并添加 publishConfig 属性
+
+最终 package.json 如下
+
+```
+{
+  "name": "pkg-b",
+  "version": "1.0.1",
+  "description": "",
+  "main": "src/index.ts",
+  "publishConfig": {
+    "main": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "author": "",
+  "license": "ISC",
+  "dependencies": {}
+}
+
+```
+
+各工程间相互引用
+
+pnpm 提供了 --filter 参数，可以用来对特定的 package 进行操作
+
+pkg-a 中将 pkg-b 作为依赖进行安装，在根目录下执行
+
+```
+pnpm install pkg-a --filter pkg-b
+
+```
+
+打包验证
+这里使用 rollup 打包，安装依赖，pnpm 提供了 -w 参数，可以将依赖包安装到工程的根目录下，作为所有 package 的公共依赖
+
+```
+pnpm install rollup@2.78.0 rollup-plugin-typescript2@0.34.1 typescript@4.9.4 -wD
+
+```
+
+创建 rollup.config.js
+
+```
+import fs from 'fs';
+import path from 'path';
+import typescript from 'rollup-plugin-typescript2';
+const packagesDir = path.resolve(__dirname, 'packages');
+const packageFiles = fs.readdirSync(packagesDir);
+function output(path) {
+  return [
+    {
+      input: [`./packages/${path}/src/index.ts`],
+      output: [
+        {
+          file: `./packages/${path}/dist/index.js`,
+          format: 'umd',
+          name: 'web-see',
+          sourcemap: true
+        }
+      ],
+      plugins: [
+        typescript({
+          tsconfigOverride: {
+            compilerOptions: {
+              module: 'ESNext'
+            }
+          },
+          useTsconfigDeclarationDir: true
+        })
+      ]
+    }
+  ];
+}
+
+export default [...packageFiles.map((path) => output(path)).flat()];
+
+```
+
+rollup.config.js 会读取 packages 文件中各子目录的名称，并将每一个目录设置成打包的入口文件，并配置对应的出口路径
+
+在根目录 package.json 中配置打包命令
+
+```
+"scripts": {
+   "build-rollup": "rollup -c"
+ }
+
+```
+
+执行 pnpm run build-rollup，会在 packages 各目录下生成对应的 dist 文件
+
+#### changesets 用来进行版本控制和管理
+
+```
+pnpm install @changesets/cli -wD
+
+pnpm changeset init
+
+```
+
+执行完初始化命令后，会在工程的根目录下生成 .changeset 目录
+在根目录 package.json 中配置对应的命令
+
+```
+"scripts": {
+    "changeset": "changeset",
+    "packages-version": "changeset version",
+    "publish": "changeset publish --registry=https://registry.npmjs.com/"
+}
+
+```
+
+下面用两个具体的例子，来演示下 changeset 的发包流程
+
+注意：npm 包一般的版本结构为：1.0.0，类似这样的三位数版本号，分别是对应的 changeset version 里面的：major、minor、patch
+
+npm 包版本 1.0.1 更新为 1.0.2
+
+执行 pnpm run changeset
+
+1、选择要发布的包
+
+![](https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/27ace4eb44264250bf2eb4752aca2b10~tplv-k3u1fbpfcp-zoom-in-crop-mark:1512:0:0:0.awebp?)
+
+2、发布 minor，选择对应的包
+
+现在是 1.0.1 更新为 1.0.2，这里选择 minor
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/947ad3a8e6c448c8949ac86b6a9f3227~tplv-k3u1fbpfcp-zoom-in-crop-mark:1512:0:0:0.awebp?)
+
+3.填写 changelog
+
+![](https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ef2b864916ec403c8612395097ea9e88~tplv-k3u1fbpfcp-zoom-in-crop-mark:1512:0:0:0.awebp?)
+
+4、Is this your desired changeset 选择 true
+
+![](https://p1-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/b321231e6b094b08ac545a2257562a97~tplv-k3u1fbpfcp-zoom-in-crop-mark:1512:0:0:0.awebp?)
+
+执行 pnpm run packages-version
+
+![](https://p9-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/58687e0b549e454f83b42840ed609d72~tplv-k3u1fbpfcp-zoom-in-crop-mark:1512:0:0:0.awebp?)
+
+提示 All files have been updated
+
+打开 pkg-a 和 pkg-b 下的 package.json，发现版本号已修改完成
+
+同时各目录下会自动生成 CHANGELOG.md 文件，记录版本号的变化
+
+执行 pnpm run publish
+发布上 npm

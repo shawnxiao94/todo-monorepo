@@ -1,8 +1,14 @@
 {
     "name": "pkg-b",
-    "version": "1.0.1",
+    "version": "2.0.0",
     "description": "",
-    "main": "index.js",
+    "main": "src/index.ts",
+    "publishConfig": {
+        "main": "dist/index.js"
+    },
+    "files": [
+        "dist"
+    ],
     "scripts": {
         "build": "tsc index.ts",
         "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,6 +16,7 @@
     "keywords": [],
     "author": "",
     "license": "ISC",
+    "type": "module",
     "devDependencies": {
         "pkg-a": "workspace:^"
     }
