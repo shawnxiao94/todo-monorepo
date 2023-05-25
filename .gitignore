@@ -1,0 +1,34 @@
+# node package download
+**/node_modules
+
+# macos
+.DS_Store
+
+# production
+**/dist
+.idea
+
+# ssr production
+**/.env.local
+**/dist-ssr
+**/.next
+**/.umi
+**/.umi-production
+**/.dumi
+
+# local env
+*.local
+
+
+# pnpm package npmrc
+.pnpm-debug.log
+pnpm-lock.yaml
+
+# eslint
+.eslintcache
+.vscode/settings.json
+
+
+**/.turbo
+
+**/*.env
