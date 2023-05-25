@@ -105,3 +105,100 @@ sum(1, 2)
 pnpm run build
 
 ```
+
+#### 发布 npm 包
+
+在执行以下步骤之前，请确保已经将代码推送到链接的 git 远程仓库中。
+
+使用 bumpp 进行版本控制，创建 tag 标签并推送到 远程 git 仓库
+
+安装 bumpp：
+
+```
+pnpm add bumpp -D
+
+```
+
+> ERR_PNPM_ADDING_TO_ROOT  Running this command will add the dependency to the workspace root, which might not be what you want - if you really meant it, make it explicit by running this command again with the -w flag (or --workspace-root). If you don't want to see this warning anymore, you may set the ignore-workspace-root-check setting to true.
+
+```
+pnpm config set ignore-workspace-root-check true
+```
+
+在根目录的 package.json 中添加以下脚本：
+
+```
+{
+  "scripts": {
+    "release": "bumpp package.json packages/**/package.json"
+  }
+}
+
+```
+
+在根目录运行以下命令
+
+```
+pnpm run release
+
+```
+
+这个命令将自动升级你的 npm 包版本，创建 git 标签，并将更改推送到你的远程 git 存储库。
+
+#### 使用 GitHub Actions 自动发布 npm 包
+
+1.首先，确保 pnpm run release 运行成功，并将更改推送到远程 git 存储库。
+
+2.创建一个名为 .github/workflows/release.yml 的文件。
+
+3.在 release.yml 文件中添加以下代码：
+
+```
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: pnpm i
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Publish
+        run: pnpm publish -r --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+
+      - run: npx changelogithub
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+```
+
+4.接下来，在 npm 上获取你的认证令牌。请注意，你需要拥有发布包的权限才能获得令牌。将令牌添加到 GitHub 仓库的 secrets 中。
+
+5.转到你的 GitHub 仓库的 “Settings” 页面，在左侧菜单中，单击 “Secrets and variables / Actions”。单击 “New repository secret” 按钮创建一个新的密钥，名称为 “NPM_TOKEN”，值为你在步骤 4 中获得的认证令牌。
+
+6.现在，当你推送一个带有标签的 commit 到 GitHub 仓库时，GitHub Actions 将会自动运行你的 release.yml 工作流程，并将你的 npm 包发布到 npm 官方网站。
